@@ -1,10 +1,13 @@
 package edu.wisc.cs.sdn.vnet.rt;
 
+import java.util.Arrays;
+
 import edu.wisc.cs.sdn.vnet.Device;
 import edu.wisc.cs.sdn.vnet.DumpFile;
 import edu.wisc.cs.sdn.vnet.Iface;
-
+import net.floodlightcontroller.packet.Data;
 import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.packet.ICMP;
 import net.floodlightcontroller.packet.IPv4;
 
 /**
@@ -12,6 +15,8 @@ import net.floodlightcontroller.packet.IPv4;
  */
 public class Router extends Device
 {	
+	private static final int ICMP_PADDING_SIZE = 4;
+	
 	/** Routing table for the router */
 	private RouteTable routeTable;
 	
@@ -119,7 +124,43 @@ public class Router extends Device
         // Check TTL
         ipPacket.setTtl((byte)(ipPacket.getTtl()-1));
         if (0 == ipPacket.getTtl())
-        { return; }
+        {
+        	Ethernet ether = new Ethernet();
+        	IPv4 ip = new IPv4();
+        	ICMP icmp = new ICMP();
+        	Data data = new Data();
+        	ether.setPayload(ip);
+        	ip.setPayload(icmp);
+        	icmp.setPayload(data);
+        	
+        	// Ethernet header
+        	ether.setEtherType(Ethernet.TYPE_IPv4);
+        	
+        	// IP header
+        	ip.setTtl((byte)64);
+        	ip.setProtocol(IPv4.PROTOCOL_ICMP);
+        	ip.setSourceAddress(inIface.getIpAddress());
+        	ip.setDestinationAddress(ipPacket.getSourceAddress());
+        	
+        	// ICMP header
+        	icmp.setIcmpType((byte)11);
+        	icmp.setIcmpCode((byte)0);
+        	
+        	// Data
+        	int headerLen = ipPacket.getHeaderLength();
+        	byte[] buf = new byte[ICMP_PADDING_SIZE + headerLen + 8];
+        	
+        	// TODO: Is it possible to have less than 8 bytes in IP payload?
+        	for(int i=0;i<headerLen+8;i++){
+        		buf[i+ICMP_PADDING_SIZE] = serialized[i];
+        	}
+        	
+        	data.setData(buf);
+        	
+        	this.forwardIpPacket(ether, null);
+        	
+        	return;
+        }
         
         // Reset checksum now that TTL is decremented
         ipPacket.resetChecksum();

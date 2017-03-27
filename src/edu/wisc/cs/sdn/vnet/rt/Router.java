@@ -125,39 +125,8 @@ public class Router extends Device
         ipPacket.setTtl((byte)(ipPacket.getTtl()-1));
         if (0 == ipPacket.getTtl())
         {
-        	Ethernet ether = new Ethernet();
-        	IPv4 ip = new IPv4();
-        	ICMP icmp = new ICMP();
-        	Data data = new Data();
-        	ether.setPayload(ip);
-        	ip.setPayload(icmp);
-        	icmp.setPayload(data);
-        	
-        	// Ethernet header
-        	ether.setEtherType(Ethernet.TYPE_IPv4);
-        	
-        	// IP header
-        	ip.setTtl((byte)64);
-        	ip.setProtocol(IPv4.PROTOCOL_ICMP);
-        	ip.setSourceAddress(inIface.getIpAddress());
-        	ip.setDestinationAddress(ipPacket.getSourceAddress());
-        	
-        	// ICMP header
-        	icmp.setIcmpType((byte)11);
-        	icmp.setIcmpCode((byte)0);
-        	
-        	// Data
-        	int headerLen = ipPacket.getHeaderLength();
-        	byte[] buf = new byte[ICMP_PADDING_SIZE + headerLen + 8];
-        	
-        	// TODO: Is it possible to have less than 8 bytes in IP payload?
-        	for(int i=0;i<headerLen+8;i++){
-        		buf[i+ICMP_PADDING_SIZE] = serialized[i];
-        	}
-        	
-        	data.setData(buf);
-        	
-        	this.forwardIpPacket(ether, null);
+        	// TODO: A. Timer expired
+        	sendICMPPacket(ipPacket, inIface, (byte)11, (byte)0);
         	
         	return;
         }
@@ -169,7 +138,21 @@ public class Router extends Device
         for (Iface iface : this.interfaces.values())
         {
         	if (ipPacket.getDestinationAddress() == iface.getIpAddress())
-        	{ return; }
+        	{
+        		// TODO: D. Destination port unreachable
+        		if(ipPacket.getProtocol() == IPv4.PROTOCOL_TCP ||
+        				ipPacket.getProtocol() == IPv4.PROTOCOL_UDP){
+                	sendICMPPacket(ipPacket, inIface, (byte)11, (byte)3);
+        		}
+        		else if(ipPacket.getProtocol() == IPv4.PROTOCOL_ICMP){
+        			ICMP icmp = (ICMP) ipPacket.getPayload();
+        			if(icmp.getIcmpType() == ICMP.TYPE_ECHO_REQUEST){
+                    	sendICMPPacket(ipPacket, inIface, (byte)0, (byte)0);
+        			}
+        		}
+        		
+        		return;
+        	}
         }
 		
         // Do route lookup and forward
@@ -192,7 +175,12 @@ public class Router extends Device
 
         // If no entry matched, do nothing
         if (null == bestMatch)
-        { return; }
+        {
+        	// TODO : B. Destination Unreachable
+        	sendICMPPacket(ipPacket, inIface, (byte)11, (byte)3);
+        	
+        	return; 
+        }
 
         // Make sure we don't sent a packet back out the interface it came in
         Iface outIface = bestMatch.getInterface();
@@ -210,9 +198,63 @@ public class Router extends Device
         // Set destination MAC address in Ethernet header
         ArpEntry arpEntry = this.arpCache.lookup(nextHop);
         if (null == arpEntry)
-        { return; }
+        {
+        	// TODO : B. Destination Unreachable
+        	sendICMPPacket(ipPacket, inIface, (byte)11, (byte)1);
+        	
+        	return;
+        }
         etherPacket.setDestinationMACAddress(arpEntry.getMac().toBytes());
         
         this.sendPacket(etherPacket, outIface);
+    }
+    
+    private void sendICMPPacket(IPv4 ipPacket, Iface inIface, byte type, byte code){
+    	Ethernet ether = new Ethernet();
+    	IPv4 ip = new IPv4();
+    	ICMP icmp = new ICMP();
+    	Data data = new Data();
+    	ether.setPayload(ip);
+    	ip.setPayload(icmp);
+    	icmp.setPayload(data);
+
+        byte[] serialized = ipPacket.serialize();
+        
+    	// Ethernet header
+    	ether.setEtherType(Ethernet.TYPE_IPv4);
+    	
+    	// IP header
+    	ip.setTtl((byte)64);
+    	ip.setProtocol(IPv4.PROTOCOL_ICMP);
+    	
+    	if(type == 0){
+    		ip.setSourceAddress(ipPacket.getDestinationAddress());
+    	} else {
+        	ip.setSourceAddress(inIface.getIpAddress());
+    	}
+    	ip.setDestinationAddress(ipPacket.getSourceAddress());
+    	
+    	// ICMP header
+    	icmp.setIcmpType(type);
+    	icmp.setIcmpCode(code);
+    	
+    	// Data
+    	if(type == 0){
+    		ICMP icmpPacket = (ICMP) ipPacket.getPayload();
+    		byte[] icmpPayload = icmpPacket.getPayload().serialize();
+    		
+        	data.setData(icmpPayload);
+    	} else {
+	    	int headerLen = ipPacket.getHeaderLength();
+	    	byte[] buf = new byte[ICMP_PADDING_SIZE + headerLen + 8];
+	    	
+	    	// TODO: Is it possible to have less than 8 bytes in IP payload?
+	    	for(int i=0;i<headerLen+8;i++){
+	    		buf[i+ICMP_PADDING_SIZE] = serialized[i];
+	    	}
+	    	data.setData(buf);
+    	}
+
+    	this.forwardIpPacket(ether, null);
     }
 }

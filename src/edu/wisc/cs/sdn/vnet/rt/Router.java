@@ -245,20 +245,15 @@ public class Router extends Device
     	} else {
             byte[] serialized = ipPacket.serialize();
             
-	    	int headerLen = ipPacket.getHeaderLength();
+	    	int headerLen = ipPacket.getHeaderLength() * 4;
 	    	byte[] buf = new byte[ICMP_PADDING_SIZE + headerLen + 8];
 	    	
-	    	// TODO: Is it possible to have less than 8 bytes in IP payload?
 	    	for(int i=0;i<headerLen+8;i++){
 	    		buf[i+ICMP_PADDING_SIZE] = serialized[i];
 	    	}
 	    	data.setData(buf);
     	}
     	
-    	// update checksum
-        byte[] ipSerialized = ip.serialize();
-        ip.deserialize(ipSerialized, 0, ipSerialized.length);
-
     	this.forwardIpPacket(ether, null);
     }
 }

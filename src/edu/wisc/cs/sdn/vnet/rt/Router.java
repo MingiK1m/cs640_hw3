@@ -217,8 +217,6 @@ public class Router extends Device
     	ether.setPayload(ip);
     	ip.setPayload(icmp);
     	icmp.setPayload(data);
-
-        byte[] serialized = ipPacket.serialize();
         
     	// Ethernet header
     	ether.setEtherType(Ethernet.TYPE_IPv4);
@@ -245,6 +243,8 @@ public class Router extends Device
     		
         	data.setData(icmpPayload);
     	} else {
+            byte[] serialized = ipPacket.serialize();
+            
 	    	int headerLen = ipPacket.getHeaderLength();
 	    	byte[] buf = new byte[ICMP_PADDING_SIZE + headerLen + 8];
 	    	
@@ -254,6 +254,10 @@ public class Router extends Device
 	    	}
 	    	data.setData(buf);
     	}
+    	
+    	// update checksum
+        byte[] ipSerialized = ip.serialize();
+        ip.deserialize(ipSerialized, 0, ipSerialized.length);
 
     	this.forwardIpPacket(ether, null);
     }

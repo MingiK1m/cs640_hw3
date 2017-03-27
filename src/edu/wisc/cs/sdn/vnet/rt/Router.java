@@ -142,7 +142,7 @@ public class Router extends Device
         		// TODO: D. Destination port unreachable
         		if(ipPacket.getProtocol() == IPv4.PROTOCOL_TCP ||
         				ipPacket.getProtocol() == IPv4.PROTOCOL_UDP){
-                	sendICMPPacket(ipPacket, inIface, (byte)11, (byte)3);
+                	sendICMPPacket(ipPacket, inIface, (byte)3, (byte)3);
         		}
         		else if(ipPacket.getProtocol() == IPv4.PROTOCOL_ICMP){
         			ICMP icmp = (ICMP) ipPacket.getPayload();
@@ -177,7 +177,7 @@ public class Router extends Device
         if (null == bestMatch)
         {
         	// TODO : B. Destination Unreachable
-        	sendICMPPacket(ipPacket, inIface, (byte)11, (byte)3);
+        	sendICMPPacket(ipPacket, inIface, (byte)3, (byte)0);
         	
         	return; 
         }
@@ -200,7 +200,7 @@ public class Router extends Device
         if (null == arpEntry)
         {
         	// TODO : B. Destination Unreachable
-        	sendICMPPacket(ipPacket, inIface, (byte)11, (byte)1);
+        	sendICMPPacket(ipPacket, inIface, (byte)3, (byte)1);
         	
         	return;
         }
